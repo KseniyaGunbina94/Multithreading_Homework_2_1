@@ -1,3 +1,5 @@
+import java.sql.Time;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -17,9 +19,33 @@ public class Main {
         }
         return route.toString();
     }
+    public static int[] findMaxFreq (Map<Integer, Integer> map) {
+        int[] maxFreq = new int[2];
+        for (Map.Entry entry : sizeToFreq.entrySet()) {
+            if ((int) entry.getValue() > maxFreq[1]) {
+                maxFreq[0] = (int) entry.getKey();
+                maxFreq[1] = (int) entry.getValue();
+            }
+        }
+        return maxFreq;
+    }
 
     public static void main(String[] args) throws ExecutionException, InterruptedException {
         final ExecutorService threadPool = Executors.newFixedThreadPool(30);
+        Thread maxFreqInf = new Thread(() -> {
+            while (!Thread.interrupted()) {
+                try {
+                    synchronized (sizeToFreq) {
+                        sizeToFreq.wait();
+                        System.out.println("Time: " + new Date() + "  Самое частое количество повторений: " + findMaxFreq(sizeToFreq)[0] + " (встретилось " + findMaxFreq(sizeToFreq)[1] + " раз)");
+                    }
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        maxFreqInf.start();
+
         for (int i = 0; i < 1000;  i++) {
             int freq = threadPool.submit(() -> {
                 char[] routeElements = generateRoute("RLRFR", 100).toCharArray();
@@ -31,20 +57,18 @@ public class Main {
                 return maxFreq;
             }).get();
             synchronized (sizeToFreq) {
-                if (!sizeToFreq.containsKey(freq))
+                if (!sizeToFreq.containsKey(freq)) {
                     sizeToFreq.put(freq, 1);
-                else
+                    sizeToFreq.notify();
+                }
+                else {
                     sizeToFreq.put(freq, sizeToFreq.get(freq) + 1);
+                    sizeToFreq.notify();
+                }
             }
         }
-        int[] maxFreq = new int[2];
-        for (Map.Entry entry : sizeToFreq.entrySet()) {
-            if ((int) entry.getValue() > maxFreq[1]) {
-                maxFreq[0] = (int) entry.getKey();
-                maxFreq[1] = (int) entry.getValue();
-            }
-        }
-        System.out.println("Самое частое количество повторений: " + maxFreq[0] + " (встретилось " + maxFreq[1] + " раз)\nДругие размеры:");
+
+        System.out.println("Самое частое количество повторений: " + findMaxFreq(sizeToFreq)[0] + " (встретилось " + findMaxFreq(sizeToFreq)[1] + " раз)\nДругие размеры:");
         sizeToFreq.forEach((o1, o2) -> System.out.println("- " + o1 + " (" + o2 + " раз)"));
     }
 }
